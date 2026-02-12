@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud Cover</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Cloud Cover</h1>
+      <p class="subtitle">Current cloud cover at your location</p>
+
+      <section id="card" class="card" aria-live="polite">
+        <p id="status">Waiting to load...</p>
+        <p id="location" class="muted"></p>
+        <p id="cloudCover" class="value"></p>
+        <p id="skyCondition" class="condition"></p>
+        <div class="meter" aria-hidden="true">
+          <div id="meterFill" class="meter-fill"></div>
+        </div>
+        <p id="updated" class="muted"></p>
+      </section>
+
+      <button id="retry" type="button">Refresh</button>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
