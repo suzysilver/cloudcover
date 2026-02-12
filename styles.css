@@ -134,17 +134,22 @@ h2 {
 }
 
 .daily-list {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scroll-snap-type: x mandatory;
 }
 
 .daily-item {
+  flex: 0 0 96px;
   border: 1px solid #dbe5ee;
   border-radius: 10px;
   padding: 0.55rem 0.4rem;
   text-align: center;
   background: #f8fbff;
+  scroll-snap-align: start;
 }
 
 .daily-day {
@@ -216,9 +221,5 @@ button:disabled {
 @media (max-width: 680px) {
   .controls {
     grid-template-columns: 1fr;
-  }
-
-  .daily-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
