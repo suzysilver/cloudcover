@@ -133,6 +133,44 @@ h2 {
   font-weight: 700;
 }
 
+.daily-list {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.daily-item {
+  border: 1px solid #dbe5ee;
+  border-radius: 10px;
+  padding: 0.55rem 0.4rem;
+  text-align: center;
+  background: #f8fbff;
+}
+
+.daily-day {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.daily-date {
+  margin: 0.1rem 0 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.daily-icon {
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.daily-cloud {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .muted {
   margin: 0.25rem 0;
   color: #6b7280;
@@ -178,5 +216,9 @@ button:disabled {
 @media (max-width: 680px) {
   .controls {
     grid-template-columns: 1fr;
+  }
+
+  .daily-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

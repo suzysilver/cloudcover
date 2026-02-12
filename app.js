@@ -5,6 +5,7 @@ const skyConditionEl = document.getElementById("skyCondition");
 const meterFillEl = document.getElementById("meterFill");
 const updatedEl = document.getElementById("updated");
 const forecastEl = document.getElementById("forecast");
+const dailyForecastEl = document.getElementById("dailyForecast");
 const retryBtn = document.getElementById("retry");
 const zipInputEl = document.getElementById("zipInput");
 const zipSearchBtn = document.getElementById("zipSearch");
@@ -47,6 +48,9 @@ function clearDisplay() {
   if (forecastEl) {
     forecastEl.innerHTML = "";
   }
+  if (dailyForecastEl) {
+    dailyForecastEl.innerHTML = "";
+  }
 }
 
 function formatTime(isoDate) {
@@ -63,6 +67,14 @@ function formatHour(isoDate) {
     return "--";
   }
   return date.toLocaleTimeString([], { hour: "numeric" });
+}
+
+function formatDayLabel(date) {
+  return date.toLocaleDateString([], { weekday: "short" });
+}
+
+function formatDayDate(date) {
+  return date.toLocaleDateString([], { month: "numeric", day: "numeric" });
 }
 
 function getFriendlyError(error) {
@@ -164,7 +176,7 @@ async function fetchCloudData(latitude, longitude) {
   endpoint.searchParams.set("longitude", longitude);
   endpoint.searchParams.set("current", "cloud_cover");
   endpoint.searchParams.set("hourly", "cloud_cover");
-  endpoint.searchParams.set("forecast_days", "2");
+  endpoint.searchParams.set("forecast_days", "8");
   endpoint.searchParams.set("timezone", "auto");
 
   const response = await fetch(endpoint);
@@ -238,6 +250,60 @@ function buildForecastItems(hourlyTimes, hourlyCloud) {
   return items;
 }
 
+function dateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function buildDailyForecast(hourlyTimes, hourlyCloud) {
+  const todayKey = dateKey(new Date());
+  const dayBuckets = new Map();
+
+  for (let i = 0; i < hourlyTimes.length; i += 1) {
+    const time = hourlyTimes[i];
+    const cover = hourlyCloud[i];
+    if (cover === undefined || cover === null) {
+      continue;
+    }
+
+    const date = new Date(time);
+    if (Number.isNaN(date.getTime())) {
+      continue;
+    }
+
+    const key = dateKey(date);
+    if (key <= todayKey) {
+      continue;
+    }
+
+    const current = dayBuckets.get(key) || { sum: 0, count: 0, date };
+    current.sum += cover;
+    current.count += 1;
+    dayBuckets.set(key, current);
+  }
+
+  const items = [];
+  for (const [, bucket] of dayBuckets) {
+    if (bucket.count === 0) {
+      continue;
+    }
+
+    items.push({
+      day: formatDayLabel(bucket.date),
+      date: formatDayDate(bucket.date),
+      cloudCover: Math.round(bucket.sum / bucket.count),
+    });
+
+    if (items.length === 7) {
+      break;
+    }
+  }
+
+  return items;
+}
+
 function renderForecast(items) {
   if (!forecastEl) {
     return;
@@ -256,6 +322,31 @@ function renderForecast(items) {
           <p class="forecast-time">${formatHour(item.time)}</p>
           <div class="forecast-icon" title="${sky.label}">${sky.icon}</div>
           <p class="forecast-cloud">${item.cloudCover}%</p>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderDailyForecast(items) {
+  if (!dailyForecastEl) {
+    return;
+  }
+
+  if (!items.length) {
+    dailyForecastEl.innerHTML = '<p class="muted">No 7-day forecast available.</p>';
+    return;
+  }
+
+  dailyForecastEl.innerHTML = items
+    .map((item) => {
+      const sky = describeSky(item.cloudCover);
+      return `
+        <article class="daily-item" style="background:${sky.tint}; border-color:${sky.color};" aria-label="${item.day} cloud cover ${item.cloudCover}%">
+          <p class="daily-day">${item.day}</p>
+          <p class="daily-date">${item.date}</p>
+          <div class="daily-icon" title="${sky.label}">${sky.icon}</div>
+          <p class="daily-cloud">${item.cloudCover}%</p>
         </article>
       `;
     })
@@ -332,6 +423,8 @@ async function loadCloudCover() {
 
     const forecastItems = buildForecastItems(weather.hourlyTimes, weather.hourlyCloud);
     renderForecast(forecastItems);
+    const dailyItems = buildDailyForecast(weather.hourlyTimes, weather.hourlyCloud);
+    renderDailyForecast(dailyItems);
   } catch (error) {
     statusEl.textContent = "Could not load cloud cover.";
     if (updatedEl) {
