@@ -9,7 +9,14 @@
   <body>
     <main class="app">
       <h1>Cloud Cover</h1>
-      <p class="subtitle">Current cloud cover at your location</p>
+      <p class="subtitle">Current cloud cover at your location or ZIP code</p>
+
+      <section class="controls" aria-label="Location controls">
+        <label for="zipInput" class="sr-only">ZIP code</label>
+        <input id="zipInput" type="text" inputmode="numeric" autocomplete="postal-code" placeholder="Enter ZIP code" maxlength="10" />
+        <button id="zipSearch" type="button">Use ZIP</button>
+        <button id="useLocation" type="button">Use My Location</button>
+      </section>
 
       <section id="card" class="card" aria-live="polite">
         <p id="status">Waiting to load...</p>
@@ -20,6 +27,11 @@
           <div id="meterFill" class="meter-fill"></div>
         </div>
         <p id="updated" class="muted"></p>
+      </section>
+
+      <section class="card forecast-card" aria-live="polite">
+        <h2>Next 24 hours</h2>
+        <div id="forecast" class="forecast-list"></div>
       </section>
 
       <button id="retry" type="button">Refresh</button>

@@ -4,10 +4,21 @@ const cloudCoverEl = document.getElementById("cloudCover");
 const skyConditionEl = document.getElementById("skyCondition");
 const meterFillEl = document.getElementById("meterFill");
 const updatedEl = document.getElementById("updated");
+const forecastEl = document.getElementById("forecast");
 const retryBtn = document.getElementById("retry");
+const zipInputEl = document.getElementById("zipInput");
+const zipSearchBtn = document.getElementById("zipSearch");
+const useLocationBtn = document.getElementById("useLocation");
+
+const appState = {
+  mode: "geo",
+  zip: "",
+};
 
 function setLoading(isLoading) {
   retryBtn.disabled = isLoading;
+  zipSearchBtn.disabled = isLoading;
+  useLocationBtn.disabled = isLoading;
   retryBtn.textContent = isLoading ? "Loading..." : "Refresh";
 }
 
@@ -17,19 +28,7 @@ function clearDisplay() {
   skyConditionEl.textContent = "";
   meterFillEl.style.width = "0%";
   updatedEl.textContent = "";
-}
-
-function describeSky(cloudCover) {
-  if (cloudCover <= 20) {
-    return { label: "Clear", color: "#22c55e" };
-  }
-  if (cloudCover <= 50) {
-    return { label: "Mostly clear", color: "#84cc16" };
-  }
-  if (cloudCover <= 80) {
-    return { label: "Partly cloudy", color: "#f59e0b" };
-  }
-  return { label: "Overcast", color: "#64748b" };
+  forecastEl.innerHTML = "";
 }
 
 function formatTime(isoDate) {
@@ -38,6 +37,14 @@ function formatTime(isoDate) {
     return "";
   }
   return date.toLocaleString();
+}
+
+function formatHour(isoDate) {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+  return date.toLocaleTimeString([], { hour: "numeric" });
 }
 
 function getFriendlyError(error) {
@@ -65,6 +72,27 @@ function getFriendlyError(error) {
   return "Unexpected error while loading cloud cover.";
 }
 
+function describeSky(cloudCover) {
+  if (cloudCover <= 20) {
+    return { label: "Clear", color: "#22c55e", icon: "🌞", tint: "#fff7cc" };
+  }
+  if (cloudCover <= 50) {
+    return { label: "Mostly clear", color: "#84cc16", icon: "🌤️", tint: "#ecfccb" };
+  }
+  if (cloudCover <= 80) {
+    return { label: "Partly cloudy", color: "#f59e0b", icon: "⛅️", tint: "#ffedd5" };
+  }
+  return { label: "Overcast", color: "#64748b", icon: "☁️", tint: "#e2e8f0" };
+}
+
+function sanitizeZip(zipRaw) {
+  return zipRaw.trim().replace(/\s+/g, "");
+}
+
+function isValidUsZip(zip) {
+  return /^\d{5}(-\d{4})?$/.test(zip);
+}
+
 async function lookupLocationName(latitude, longitude) {
   const endpoint = new URL("https://geocoding-api.open-meteo.com/v1/reverse");
   endpoint.searchParams.set("latitude", latitude);
@@ -87,11 +115,38 @@ async function lookupLocationName(latitude, longitude) {
   return parts.join(", ");
 }
 
-async function fetchCloudCover(latitude, longitude) {
+async function lookupZip(zip) {
+  const endpoint = new URL("https://geocoding-api.open-meteo.com/v1/search");
+  endpoint.searchParams.set("name", zip);
+  endpoint.searchParams.set("count", "1");
+  endpoint.searchParams.set("language", "en");
+  endpoint.searchParams.set("country_code", "US");
+
+  const response = await fetch(endpoint);
+  if (!response.ok) {
+    throw new Error(`ZIP lookup failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const result = data?.results?.[0];
+  if (!result) {
+    throw new Error("ZIP code not found.");
+  }
+
+  return {
+    latitude: result.latitude,
+    longitude: result.longitude,
+    name: [result.name, result.admin1, result.country].filter(Boolean).join(", "),
+  };
+}
+
+async function fetchCloudData(latitude, longitude) {
   const endpoint = new URL("https://api.open-meteo.com/v1/forecast");
   endpoint.searchParams.set("latitude", latitude);
   endpoint.searchParams.set("longitude", longitude);
   endpoint.searchParams.set("current", "cloud_cover");
+  endpoint.searchParams.set("hourly", "cloud_cover");
+  endpoint.searchParams.set("forecast_days", "2");
   endpoint.searchParams.set("timezone", "auto");
 
   const response = await fetch(endpoint);
@@ -104,11 +159,24 @@ async function fetchCloudCover(latitude, longitude) {
   const cloudCover = current?.cloud_cover ?? current?.cloudcover;
   const updated = current?.time;
 
+  const hourly = data?.hourly;
+  const hourlyTimes = hourly?.time || [];
+  const hourlyCloud = hourly?.cloud_cover || hourly?.cloudcover || [];
+
   if (cloudCover === undefined || cloudCover === null) {
     throw new Error("Cloud cover data is unavailable right now.");
   }
 
-  return { cloudCover, updated };
+  if (!Array.isArray(hourlyTimes) || !Array.isArray(hourlyCloud) || hourlyTimes.length === 0 || hourlyCloud.length === 0) {
+    throw new Error("24-hour forecast data is unavailable right now.");
+  }
+
+  return {
+    currentCloudCover: cloudCover,
+    updated,
+    hourlyTimes,
+    hourlyCloud,
+  };
 }
 
 function getCurrentPosition() {
@@ -126,53 +194,135 @@ function getCurrentPosition() {
   });
 }
 
+function buildForecastItems(hourlyTimes, hourlyCloud) {
+  const now = Date.now();
+  const startIndex = Math.max(
+    0,
+    hourlyTimes.findIndex((time) => {
+      const timestamp = new Date(time).getTime();
+      return Number.isFinite(timestamp) && timestamp > now;
+    })
+  );
+  const items = [];
+
+  for (let i = startIndex; i < hourlyTimes.length && items.length < 24; i += 1) {
+    const value = hourlyCloud[i];
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    items.push({
+      time: hourlyTimes[i],
+      cloudCover: Math.round(value),
+    });
+  }
+
+  return items;
+}
+
+function renderForecast(items) {
+  if (!items.length) {
+    forecastEl.innerHTML = '<p class="muted">No hourly forecast available.</p>';
+    return;
+  }
+
+  forecastEl.innerHTML = items
+    .map((item) => {
+      const sky = describeSky(item.cloudCover);
+      return `
+        <article class="forecast-item" style="background:${sky.tint}; border-color:${sky.color};" aria-label="${formatHour(item.time)} cloud cover ${item.cloudCover}%">
+          <p class="forecast-time">${formatHour(item.time)}</p>
+          <div class="forecast-icon" title="${sky.label}">${sky.icon}</div>
+          <p class="forecast-cloud">${item.cloudCover}%</p>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function resolveTargetLocation() {
+  if (appState.mode === "zip") {
+    const zip = sanitizeZip(appState.zip);
+    if (!isValidUsZip(zip)) {
+      throw new Error("Please enter a valid US ZIP code (12345 or 12345-6789).");
+    }
+    return lookupZip(zip);
+  }
+
+  const position = await getCurrentPosition();
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    name: "",
+  };
+}
+
 async function loadCloudCover() {
   setLoading(true);
   clearDisplay();
-  statusEl.textContent = "Getting your location...";
+  statusEl.textContent = "Getting location...";
 
   try {
-    const position = await getCurrentPosition();
-    const { latitude, longitude } = position.coords;
+    const target = await resolveTargetLocation();
 
     statusEl.textContent = "Fetching cloud cover...";
+    const weather = await fetchCloudData(target.latitude, target.longitude);
 
-    const weather = await fetchCloudCover(latitude, longitude);
-
-    let place = "";
-    try {
-      place = await lookupLocationName(latitude, longitude);
-    } catch (_) {
-      // Reverse geocoding is optional; keep app functional if it fails.
+    let place = target.name;
+    if (!place) {
+      try {
+        place = await lookupLocationName(target.latitude, target.longitude);
+      } catch (_) {
+        // Reverse geocoding is optional.
+      }
     }
 
-    statusEl.textContent = "Current cloud cover";
-    const roundedCloudCover = Math.round(weather.cloudCover);
+    const roundedCloudCover = Math.round(weather.currentCloudCover);
     const sky = describeSky(roundedCloudCover);
+
+    statusEl.textContent = "Current cloud cover";
     cloudCoverEl.textContent = `${roundedCloudCover}%`;
-    skyConditionEl.textContent = `Sky: ${sky.label}`;
+    skyConditionEl.textContent = `Sky: ${sky.icon} ${sky.label}`;
     meterFillEl.style.width = `${Math.max(0, Math.min(100, roundedCloudCover))}%`;
     meterFillEl.style.background = sky.color;
 
     if (place) {
       locationEl.textContent = place;
     } else {
-      locationEl.textContent = `${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+      locationEl.textContent = `${target.latitude.toFixed(3)}, ${target.longitude.toFixed(3)}`;
     }
 
     if (weather.updated) {
       updatedEl.textContent = `Updated: ${formatTime(weather.updated)}`;
     }
+
+    const forecastItems = buildForecastItems(weather.hourlyTimes, weather.hourlyCloud);
+    renderForecast(forecastItems);
   } catch (error) {
     statusEl.textContent = "Could not load cloud cover.";
-    cloudCoverEl.textContent = "";
-    skyConditionEl.textContent = "";
-    meterFillEl.style.width = "0%";
     updatedEl.textContent = getFriendlyError(error);
   } finally {
     setLoading(false);
   }
 }
+
+zipSearchBtn.addEventListener("click", () => {
+  appState.mode = "zip";
+  appState.zip = zipInputEl.value;
+  loadCloudCover();
+});
+
+zipInputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    zipSearchBtn.click();
+  }
+});
+
+useLocationBtn.addEventListener("click", () => {
+  appState.mode = "geo";
+  loadCloudCover();
+});
 
 retryBtn.addEventListener("click", loadCloudCover);
 loadCloudCover();
