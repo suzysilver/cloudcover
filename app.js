@@ -16,19 +16,37 @@ const appState = {
 };
 
 function setLoading(isLoading) {
-  retryBtn.disabled = isLoading;
-  zipSearchBtn.disabled = isLoading;
-  useLocationBtn.disabled = isLoading;
-  retryBtn.textContent = isLoading ? "Loading..." : "Refresh";
+  if (retryBtn) {
+    retryBtn.disabled = isLoading;
+    retryBtn.textContent = isLoading ? "Loading..." : "Refresh";
+  }
+  if (zipSearchBtn) {
+    zipSearchBtn.disabled = isLoading;
+  }
+  if (useLocationBtn) {
+    useLocationBtn.disabled = isLoading;
+  }
 }
 
 function clearDisplay() {
-  locationEl.textContent = "";
-  cloudCoverEl.textContent = "";
-  skyConditionEl.textContent = "";
-  meterFillEl.style.width = "0%";
-  updatedEl.textContent = "";
-  forecastEl.innerHTML = "";
+  if (locationEl) {
+    locationEl.textContent = "";
+  }
+  if (cloudCoverEl) {
+    cloudCoverEl.textContent = "";
+  }
+  if (skyConditionEl) {
+    skyConditionEl.textContent = "";
+  }
+  if (meterFillEl) {
+    meterFillEl.style.width = "0%";
+  }
+  if (updatedEl) {
+    updatedEl.textContent = "";
+  }
+  if (forecastEl) {
+    forecastEl.innerHTML = "";
+  }
 }
 
 function formatTime(isoDate) {
@@ -221,6 +239,10 @@ function buildForecastItems(hourlyTimes, hourlyCloud) {
 }
 
 function renderForecast(items) {
+  if (!forecastEl) {
+    return;
+  }
+
   if (!items.length) {
     forecastEl.innerHTML = '<p class="muted">No hourly forecast available.</p>';
     return;
@@ -242,7 +264,7 @@ function renderForecast(items) {
 
 async function resolveTargetLocation() {
   if (appState.mode === "zip") {
-    const zip = sanitizeZip(appState.zip);
+    const zip = sanitizeZip(appState.zip || zipInputEl?.value || "");
     if (!isValidUsZip(zip)) {
       throw new Error("Please enter a valid US ZIP code (12345 or 12345-6789).");
     }
@@ -281,48 +303,70 @@ async function loadCloudCover() {
     const sky = describeSky(roundedCloudCover);
 
     statusEl.textContent = "Current cloud cover";
-    cloudCoverEl.textContent = `${roundedCloudCover}%`;
-    skyConditionEl.textContent = `Sky: ${sky.icon} ${sky.label}`;
-    meterFillEl.style.width = `${Math.max(0, Math.min(100, roundedCloudCover))}%`;
-    meterFillEl.style.background = sky.color;
+    if (cloudCoverEl) {
+      cloudCoverEl.textContent = `${roundedCloudCover}%`;
+    }
+    if (skyConditionEl) {
+      skyConditionEl.textContent = `Sky: ${sky.icon} ${sky.label}`;
+    }
+    if (meterFillEl) {
+      meterFillEl.style.width = `${Math.max(0, Math.min(100, roundedCloudCover))}%`;
+      meterFillEl.style.background = sky.color;
+    }
 
     if (place) {
-      locationEl.textContent = place;
+      if (locationEl) {
+        locationEl.textContent = place;
+      }
     } else {
-      locationEl.textContent = `${target.latitude.toFixed(3)}, ${target.longitude.toFixed(3)}`;
+      if (locationEl) {
+        locationEl.textContent = `${target.latitude.toFixed(3)}, ${target.longitude.toFixed(3)}`;
+      }
     }
 
     if (weather.updated) {
-      updatedEl.textContent = `Updated: ${formatTime(weather.updated)}`;
+      if (updatedEl) {
+        updatedEl.textContent = `Updated: ${formatTime(weather.updated)}`;
+      }
     }
 
     const forecastItems = buildForecastItems(weather.hourlyTimes, weather.hourlyCloud);
     renderForecast(forecastItems);
   } catch (error) {
     statusEl.textContent = "Could not load cloud cover.";
-    updatedEl.textContent = getFriendlyError(error);
+    if (updatedEl) {
+      updatedEl.textContent = getFriendlyError(error);
+    }
   } finally {
     setLoading(false);
   }
 }
 
-zipSearchBtn.addEventListener("click", () => {
-  appState.mode = "zip";
-  appState.zip = zipInputEl.value;
-  loadCloudCover();
-});
+if (zipSearchBtn) {
+  zipSearchBtn.addEventListener("click", () => {
+    appState.mode = "zip";
+    appState.zip = zipInputEl?.value || "";
+    loadCloudCover();
+  });
+}
 
-zipInputEl.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    zipSearchBtn.click();
-  }
-});
+if (zipInputEl && zipSearchBtn) {
+  zipInputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      zipSearchBtn.click();
+    }
+  });
+}
 
-useLocationBtn.addEventListener("click", () => {
-  appState.mode = "geo";
-  loadCloudCover();
-});
+if (useLocationBtn) {
+  useLocationBtn.addEventListener("click", () => {
+    appState.mode = "geo";
+    loadCloudCover();
+  });
+}
 
-retryBtn.addEventListener("click", loadCloudCover);
+if (retryBtn) {
+  retryBtn.addEventListener("click", loadCloudCover);
+}
 loadCloudCover();
