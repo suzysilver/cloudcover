@@ -17,6 +17,7 @@
         <button id="zipSearch" type="button">Use ZIP</button>
         <button id="useLocation" type="button">Use My Location</button>
       </section>
+      <p id="sourceMode" class="source-mode">Using: My Location</p>
 
       <section id="card" class="card" aria-live="polite">
         <p id="status">Waiting to load...</p>
@@ -41,6 +42,17 @@
 
       <button id="retry" type="button">Refresh</button>
     </main>
+
+    <div id="dayPopover" class="popover-backdrop" hidden>
+      <section class="popover-card" role="dialog" aria-modal="true" aria-labelledby="dayPopoverTitle">
+        <div class="popover-handle" aria-hidden="true"></div>
+        <div class="popover-header">
+          <h3 id="dayPopoverTitle">Hourly Cloud Cover</h3>
+        </div>
+        <div id="dayPopoverBody" class="popover-content"></div>
+        <p class="popover-hint">Tap outside to close</p>
+      </section>
+    </div>
 
     <script src="app.js" defer></script>
   </body>

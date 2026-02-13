@@ -51,6 +51,18 @@ h2 {
   font-size: 0.98rem;
 }
 
+.source-mode {
+  margin: 0 0 0.7rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: 999px;
+  width: fit-content;
+  padding: 0.2rem 0.65rem;
+}
+
 .card {
   background: #ffffff;
   border: 1px solid #dbe5ee;
@@ -152,6 +164,16 @@ h2 {
   scroll-snap-align: start;
 }
 
+.daily-item-button {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.daily-item-button:hover {
+  transform: translateY(-1px);
+}
+
 .daily-day {
   margin: 0;
   font-size: 0.86rem;
@@ -174,6 +196,114 @@ h2 {
   margin: 0.1rem 0 0;
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+.daily-hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.7rem;
+  color: #475569;
+}
+
+.popover-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  z-index: 30;
+}
+
+.popover-backdrop[hidden] {
+  display: none;
+}
+
+.popover-card {
+  width: min(96vw, 760px);
+  max-height: 78vh;
+  overflow: auto;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #dbe5ee;
+  border-radius: 20px 20px 14px 14px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.28);
+  padding: 0.85rem 0.9rem 1rem;
+  animation: popover-up 180ms ease-out;
+}
+
+.popover-handle {
+  width: 52px;
+  height: 5px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  margin: 0 auto 0.7rem;
+}
+
+.popover-header {
+  display: block;
+  margin-bottom: 0.6rem;
+  text-align: center;
+}
+
+.popover-header h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.popover-content {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scroll-snap-type: x mandatory;
+}
+
+.popover-hour {
+  flex: 0 0 88px;
+  border: 1px solid #dbe5ee;
+  border-radius: 10px;
+  padding: 0.45rem 0.35rem;
+  text-align: center;
+  scroll-snap-align: start;
+}
+
+.popover-hour-time {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.popover-hour-icon {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.popover-hour-cloud {
+  margin: 0.05rem 0 0;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.popover-hint {
+  margin: 0.6rem 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+@keyframes popover-up {
+  from {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .muted {

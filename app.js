@@ -6,14 +6,19 @@ const meterFillEl = document.getElementById("meterFill");
 const updatedEl = document.getElementById("updated");
 const forecastEl = document.getElementById("forecast");
 const dailyForecastEl = document.getElementById("dailyForecast");
+const dayPopoverEl = document.getElementById("dayPopover");
+const dayPopoverTitleEl = document.getElementById("dayPopoverTitle");
+const dayPopoverBodyEl = document.getElementById("dayPopoverBody");
 const retryBtn = document.getElementById("retry");
 const zipInputEl = document.getElementById("zipInput");
 const zipSearchBtn = document.getElementById("zipSearch");
 const useLocationBtn = document.getElementById("useLocation");
+const sourceModeEl = document.getElementById("sourceMode");
 
 const appState = {
   mode: "geo",
   zip: "",
+  hourlyByDay: {},
 };
 
 function setLoading(isLoading) {
@@ -27,6 +32,20 @@ function setLoading(isLoading) {
   if (useLocationBtn) {
     useLocationBtn.disabled = isLoading;
   }
+}
+
+function setSourceModeLabel() {
+  if (!sourceModeEl) {
+    return;
+  }
+
+  if (appState.mode === "zip") {
+    const zip = sanitizeZip(appState.zip || zipInputEl?.value || "");
+    sourceModeEl.textContent = zip ? `Using: ZIP ${zip}` : "Using: ZIP code";
+    return;
+  }
+
+  sourceModeEl.textContent = "Using: My Location";
 }
 
 function clearDisplay() {
@@ -51,6 +70,8 @@ function clearDisplay() {
   if (dailyForecastEl) {
     dailyForecastEl.innerHTML = "";
   }
+  appState.hourlyByDay = {};
+  closeDayPopover();
 }
 
 function formatTime(isoDate) {
@@ -209,19 +230,35 @@ async function fetchCloudData(latitude, longitude) {
   };
 }
 
-function getCurrentPosition() {
+function requestPosition(options) {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Geolocation is not supported by this browser."));
-      return;
-    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
 
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
+async function getCurrentPosition() {
+  if (!navigator.geolocation) {
+    throw new Error("Geolocation is not supported by this browser.");
+  }
+
+  try {
+    return await requestPosition({
       enableHighAccuracy: true,
       timeout: 10000,
       maximumAge: 60000,
     });
-  });
+  } catch (error) {
+    if (!error || (error.code !== 2 && error.code !== 3)) {
+      throw error;
+    }
+
+    // Fallback for users without precise location: try coarse location.
+    return requestPosition({
+      enableHighAccuracy: false,
+      timeout: 15000,
+      maximumAge: 300000,
+    });
+  }
 }
 
 function buildForecastItems(hourlyTimes, hourlyCloud) {
@@ -291,6 +328,7 @@ function buildDailyForecast(hourlyTimes, hourlyCloud) {
     }
 
     items.push({
+      key: dateKey(bucket.date),
       day: formatDayLabel(bucket.date),
       date: formatDayDate(bucket.date),
       cloudCover: Math.round(bucket.sum / bucket.count),
@@ -302,6 +340,35 @@ function buildDailyForecast(hourlyTimes, hourlyCloud) {
   }
 
   return items;
+}
+
+function buildHourlyByDay(hourlyTimes, hourlyCloud) {
+  const byDay = {};
+
+  for (let i = 0; i < hourlyTimes.length; i += 1) {
+    const time = hourlyTimes[i];
+    const value = hourlyCloud[i];
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    const date = new Date(time);
+    if (Number.isNaN(date.getTime())) {
+      continue;
+    }
+
+    const key = dateKey(date);
+    if (!byDay[key]) {
+      byDay[key] = [];
+    }
+
+    byDay[key].push({
+      time,
+      cloudCover: Math.round(value),
+    });
+  }
+
+  return byDay;
 }
 
 function renderForecast(items) {
@@ -342,15 +409,54 @@ function renderDailyForecast(items) {
     .map((item) => {
       const sky = describeSky(item.cloudCover);
       return `
-        <article class="daily-item" style="background:${sky.tint}; border-color:${sky.color};" aria-label="${item.day} cloud cover ${item.cloudCover}%">
+        <button type="button" class="daily-item daily-item-button" data-day-key="${item.key}" data-day-label="${item.day} ${item.date}" style="background:${sky.tint}; border-color:${sky.color};" aria-label="${item.day} cloud cover ${item.cloudCover}%">
           <p class="daily-day">${item.day}</p>
           <p class="daily-date">${item.date}</p>
           <div class="daily-icon" title="${sky.label}">${sky.icon}</div>
           <p class="daily-cloud">${item.cloudCover}%</p>
+          <p class="daily-hint">View hourly</p>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function closeDayPopover() {
+  if (!dayPopoverEl) {
+    return;
+  }
+
+  dayPopoverEl.hidden = true;
+  if (dayPopoverBodyEl) {
+    dayPopoverBodyEl.innerHTML = "";
+  }
+}
+
+function openDayPopover(dayKey, dayLabel) {
+  if (!dayPopoverEl || !dayPopoverBodyEl || !dayPopoverTitleEl) {
+    return;
+  }
+
+  const hours = appState.hourlyByDay?.[dayKey];
+  if (!Array.isArray(hours) || !hours.length) {
+    return;
+  }
+
+  dayPopoverTitleEl.textContent = `${dayLabel} hourly cloud cover`;
+  dayPopoverBodyEl.innerHTML = hours
+    .map((hour) => {
+      const sky = describeSky(hour.cloudCover);
+      return `
+        <article class="popover-hour" style="background:${sky.tint}; border-color:${sky.color};">
+          <p class="popover-hour-time">${formatHour(hour.time)}</p>
+          <div class="popover-hour-icon" title="${sky.label}">${sky.icon}</div>
+          <p class="popover-hour-cloud">${hour.cloudCover}%</p>
         </article>
       `;
     })
     .join("");
+
+  dayPopoverEl.hidden = false;
 }
 
 async function resolveTargetLocation() {
@@ -372,6 +478,7 @@ async function resolveTargetLocation() {
 
 async function loadCloudCover() {
   setLoading(true);
+  setSourceModeLabel();
   clearDisplay();
   statusEl.textContent = "Getting location...";
 
@@ -423,6 +530,7 @@ async function loadCloudCover() {
 
     const forecastItems = buildForecastItems(weather.hourlyTimes, weather.hourlyCloud);
     renderForecast(forecastItems);
+    appState.hourlyByDay = buildHourlyByDay(weather.hourlyTimes, weather.hourlyCloud);
     const dailyItems = buildDailyForecast(weather.hourlyTimes, weather.hourlyCloud);
     renderDailyForecast(dailyItems);
   } catch (error) {
@@ -439,6 +547,7 @@ if (zipSearchBtn) {
   zipSearchBtn.addEventListener("click", () => {
     appState.mode = "zip";
     appState.zip = zipInputEl?.value || "";
+    setSourceModeLabel();
     loadCloudCover();
   });
 }
@@ -455,11 +564,48 @@ if (zipInputEl && zipSearchBtn) {
 if (useLocationBtn) {
   useLocationBtn.addEventListener("click", () => {
     appState.mode = "geo";
+    appState.zip = "";
+    if (zipInputEl) {
+      zipInputEl.value = "";
+    }
+    setSourceModeLabel();
     loadCloudCover();
   });
 }
 
+if (dailyForecastEl) {
+  dailyForecastEl.addEventListener("click", (event) => {
+    const button = event.target.closest(".daily-item-button");
+    if (!button) {
+      return;
+    }
+
+    const dayKey = button.dataset.dayKey;
+    const dayLabel = button.dataset.dayLabel || "Selected day";
+    if (!dayKey) {
+      return;
+    }
+
+    openDayPopover(dayKey, dayLabel);
+  });
+}
+
+if (dayPopoverEl) {
+  dayPopoverEl.addEventListener("click", (event) => {
+    if (event.target === dayPopoverEl) {
+      closeDayPopover();
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeDayPopover();
+  }
+});
+
 if (retryBtn) {
   retryBtn.addEventListener("click", loadCloudCover);
 }
+setSourceModeLabel();
 loadCloudCover();
