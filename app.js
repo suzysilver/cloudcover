@@ -19,6 +19,7 @@ const appState = {
   mode: "geo",
   zip: "",
   hourlyByDay: {},
+  requestId: 0,
 };
 
 function setLoading(isLoading) {
@@ -242,17 +243,30 @@ async function getCurrentPosition() {
   }
 
   try {
+    // Fast path: use coarse/cached location first for quicker startup.
+    return await requestPosition({
+      enableHighAccuracy: false,
+      timeout: 4000,
+      maximumAge: 300000,
+    });
+  } catch (error) {
+    if (error?.code === 1) {
+      throw error;
+    }
+  }
+
+  try {
     return await requestPosition({
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 8000,
       maximumAge: 60000,
     });
   } catch (error) {
-    if (!error || (error.code !== 2 && error.code !== 3)) {
+    if (error?.code === 1) {
       throw error;
     }
 
-    // Fallback for users without precise location: try coarse location.
+    // Last fallback: non-precise location.
     return requestPosition({
       enableHighAccuracy: false,
       timeout: 15000,
@@ -477,6 +491,7 @@ async function resolveTargetLocation() {
 }
 
 async function loadCloudCover() {
+  const requestId = ++appState.requestId;
   setLoading(true);
   setSourceModeLabel();
   clearDisplay();
@@ -484,17 +499,17 @@ async function loadCloudCover() {
 
   try {
     const target = await resolveTargetLocation();
+    if (requestId !== appState.requestId) {
+      return;
+    }
 
     statusEl.textContent = "Fetching cloud cover...";
+    const placePromise = target.name
+      ? Promise.resolve(target.name)
+      : lookupLocationName(target.latitude, target.longitude).catch(() => "");
     const weather = await fetchCloudData(target.latitude, target.longitude);
-
-    let place = target.name;
-    if (!place) {
-      try {
-        place = await lookupLocationName(target.latitude, target.longitude);
-      } catch (_) {
-        // Reverse geocoding is optional.
-      }
+    if (requestId !== appState.requestId) {
+      return;
     }
 
     const roundedCloudCover = Math.round(weather.currentCloudCover);
@@ -512,14 +527,8 @@ async function loadCloudCover() {
       meterFillEl.style.background = sky.color;
     }
 
-    if (place) {
-      if (locationEl) {
-        locationEl.textContent = place;
-      }
-    } else {
-      if (locationEl) {
-        locationEl.textContent = `${target.latitude.toFixed(3)}, ${target.longitude.toFixed(3)}`;
-      }
+    if (locationEl) {
+      locationEl.textContent = `${target.latitude.toFixed(3)}, ${target.longitude.toFixed(3)}`;
     }
 
     if (weather.updated) {
@@ -533,6 +542,14 @@ async function loadCloudCover() {
     appState.hourlyByDay = buildHourlyByDay(weather.hourlyTimes, weather.hourlyCloud);
     const dailyItems = buildDailyForecast(weather.hourlyTimes, weather.hourlyCloud);
     renderDailyForecast(dailyItems);
+
+    const place = await placePromise;
+    if (requestId !== appState.requestId) {
+      return;
+    }
+    if (place && locationEl) {
+      locationEl.textContent = place;
+    }
   } catch (error) {
     statusEl.textContent = "Could not load cloud cover.";
     if (updatedEl) {
