@@ -26,6 +26,12 @@ h1 {
   font-size: 1.8rem;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 h2 {
   margin: 0 0 0.75rem;
   font-size: 1.1rem;
@@ -34,6 +40,50 @@ h2 {
 .subtitle {
   margin: 0.25rem 0 1rem;
   color: #4b5563;
+}
+
+.tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  outline: none;
+}
+
+.info-dot {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid #93c5fd;
+}
+
+.tooltip-text {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(84vw, 260px);
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 9px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 150ms ease;
+  z-index: 8;
+}
+
+.tooltip-wrap:hover .tooltip-text,
+.tooltip-wrap:focus-visible .tooltip-text {
+  opacity: 1;
+  visibility: visible;
 }
 
 .controls {
@@ -82,7 +132,7 @@ h2 {
 
 .value {
   margin: 0.6rem 0;
-  font-size: 2.2rem;
+  font-size: 3rem;
   font-weight: 700;
 }
 
